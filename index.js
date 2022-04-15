@@ -79,13 +79,6 @@ app.post("/upload", upload, async (req, res) => {
       const buffer = await getBufferFromS3Promise(Params);
       const workbook = XLSX.read(buffer);
       console.log(workbook);
-      // dynamodb.putItem(Params, (err, data) => {
-      //   if (err) throw err;
-      //   res.status.send("ok");
-      // });
-      // const file = reader.readFile(Params);
-      // console.log(file);
-      // let result = await dynamodb.put(Params).promise();
       res.send("result");
     } else {
       res.status(302).send("file extension does not support");
