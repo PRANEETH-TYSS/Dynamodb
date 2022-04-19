@@ -4,19 +4,14 @@ const app = express();
 const PORT = 5000;
 const AWS = require("aws-sdk");
 const multer = require("multer");
+const csv = require("csvtojson");
 const { v4: uuid } = require("uuid");
-const XLSX = require("xlsx");
-// const dynamodb = new AWS.DynamoDB({
-//   region: "ap-south-1",
-//   accessKeyId: process.env.AWS_ID,
-//   secretAccessKey: process.env.AWS_SECRET,
-// });
-AWS.config.update({
-  accessKeyId: process.env.AWS_ID,
-  secretAccessKey: process.env.AWS_SECRET,
-});
-const dynamodb = new AWS.DynamoDB.DocumentClient({
+const s3res = new AWS.S3();
+var documentClient = new AWS.DynamoDB.DocumentClient({
+  apiVersion: "2012-08-10",
   region: "ap-south-1",
+});
+AWS.config.update({
   accessKeyId: process.env.AWS_ID,
   secretAccessKey: process.env.AWS_SECRET,
 });
@@ -40,48 +35,54 @@ const upload = multer({ storage }).single("image");
 
 app.post("/upload", upload, async (req, res) => {
   try {
-    let myFile = req.file.originalname;
-    if (myFile.slice(-5) == ".xlsx") {
-      // const fileType = myFile[myFile.length - 1];
+    if (
+      req.file.mimetype.includes("excel") ||
+      req.file.mimetype.includes("spreadsheetml")
+    ) {
       const params = {
         Bucket: process.env.AWS_BUCKET_NAME,
         Key: `${uuid()}.xlsx`,
         Body: req.file.buffer,
       };
       var s3 = await S3bucket.upload(params).promise();
-      var Params = {
-        TableName: userTable,
-        Item: {
-          id: `${uuid()}`,
-          s3response: s3,
-        },
-      };
-      function getBufferFromS3(file, callback) {
-        const buffers = [];
-        const s3 = new AWS.S3();
-        const stream = s3
-          .getObject({ Bucket: "praneethawsstoragefile", Key: file })
-          .createReadStream();
-        stream.on("data", data => buffers.push(data));
-        stream.on("end", () => callback(null, Buffer.concat(buffers)));
-        stream.on("error", error => callback(error));
-      }
-
-      // promisify read stream from s3
-      function getBufferFromS3Promise(file) {
-        return new Promise((resolve, reject) => {
-          getBufferFromS3(file, (error, s3buffer) => {
-            if (error) return reject(error);
-            return resolve(s3buffer);
-          });
+      //converting to json
+      const s3Stream = s3res.getObject(bucketParams).createReadStream();
+      csv()
+        .fromStream(s3Stream)
+        .on("data", row => {
+          let jsonContent = JSON.parse(row);
+          console.log(JSON.stringify(jsonContent));
         });
-      }
-      const buffer = await getBufferFromS3Promise(Params);
-      const workbook = XLSX.read(buffer);
-      console.log(workbook);
+      var bucketParams = {
+        Bucket: process.env.AWS_BUCKET_NAME,
+        Key: params.Key,
+      };
+      S3bucket.getObject(bucketParams, function (err, data) {
+        if (err) {
+          console.log("Error", err);
+        } else {
+          let data2 = data.Body.buffer;
+          var Params = {
+            TableName: process.env.TABLE_NAME,
+            Item: {
+              id: params.Key,
+              s3response: data2,
+            },
+          };
+          documentClient.put(Params, (err, data) => {
+            if (err) {
+              console.log(err);
+            } else {
+              console.log("successfully added ");
+              console.log(data);
+            }
+          });
+        }
+      });
+
       res.send("result");
     } else {
-      res.status(302).send("file extension does not support");
+      res.status(302).send("please upload an excelsheet only");
     }
   } catch (err) {
     console.error(err);

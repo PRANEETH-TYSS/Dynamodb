@@ -1,0 +1,26 @@
+// if (myFile.slice(-5) == ".xlsx") {
+//   const params = {
+//     Bucket: process.env.AWS_BUCKET_NAME,
+//     Key: `${uuid()}.xlsx`,
+//     Body: req.file.buffer,
+//   };
+//   var s3 = await S3bucket.upload(params).promise();
+//   console.log(params);
+//   var Params = {
+//     TableName: userTable,
+//     Item: {
+//       id: `${uuid()}`,
+//       s3response: s3,
+//     },
+//   };
+// } else {
+//   res.status(302).send("file extension does not support");
+// }
+
+
+const storage = multer.memoryStorage({
+  destination: function (req, file, callback) {
+    callback(null, "");
+  },
+});
+const upload = multer({ storage }).single("image");
